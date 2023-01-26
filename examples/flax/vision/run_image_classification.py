@@ -243,7 +243,7 @@ def create_learning_rate_fn(
     return schedule_fn
 
 
-def main():
+def main(start_time_sec):
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
@@ -500,8 +500,18 @@ def main():
 
     train_time = 0
     epochs = tqdm(range(num_epochs), desc=f"Epoch ... (1/{num_epochs})", position=0)
+
+    # Calculate startup time
+    startup_time_sec = time.time() - start_time_sec
+    logger.warning(f'====== The startup time is: {startup_time_sec} ======')
+
     for epoch in epochs:
         # ======================== Training ================================
+        if epoch == 1:
+            jax.profiler.start_trace("/tmp/jax_profiles")
+        if epoch == 2:
+            jax.profiler.stop_trace()
+
         train_start = time.time()
 
         # Create sampling rng
@@ -519,13 +529,16 @@ def main():
             train_step_progress_bar.update(1)
 
         train_time += time.time() - train_start
+        steps_per_sec = (epoch + 1) * steps_per_epoch / train_time
+        examples_per_sec = steps_per_sec * train_batch_size
 
         train_metric = unreplicate(train_metric)
 
         train_step_progress_bar.close()
         epochs.write(
             f"Epoch... ({epoch + 1}/{num_epochs} | Loss: {train_metric['loss']}, Learning Rate:"
-            f" {train_metric['learning_rate']})"
+            f" {train_metric['learning_rate']}, Steps per second: {steps_per_sec},"
+            f" Examples per second: {examples_per_sec})"
         )
 
         # ======================== Evaluating ==============================
@@ -561,4 +574,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    start_time_sec = time.time()
+    main(start_time_sec)
+    wall_time_sec = time.time() - start_time_sec
+    logger.warning(f'====== The wall time is: {wall_time_sec} ======')
