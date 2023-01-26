@@ -578,3 +578,5 @@ if __name__ == "__main__":
     main(start_time_sec)
     wall_time_sec = time.time() - start_time_sec
     logger.warning(f'====== The wall time is: {wall_time_sec} ======')
+    # Let all logs print out
+    time.sleep(60)
