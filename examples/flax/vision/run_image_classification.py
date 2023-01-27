@@ -538,11 +538,13 @@ def main(start_time_sec):
         step_time_sec = 1 / steps_per_sec
         examples_per_sec = steps_per_sec * train_batch_size
 
-        clu_metrics = {}
-        clu_metrics["steps_per_sec"] = steps_per_sec
-        clu_metrics["step_time_sec"] = step_time_sec
-        clu_metrics["examples_per_sec"] = examples_per_sec
-        clu_writer.write_scalars(epoch, clu_metrics)
+        # Save metrics
+        if jax.process_index() == 0:
+            clu_metrics = {}
+            clu_metrics["steps_per_sec"] = steps_per_sec
+            clu_metrics["step_time_sec"] = step_time_sec
+            clu_metrics["examples_per_sec"] = examples_per_sec
+            clu_writer.write_scalars(epoch, clu_metrics)
 
         train_metric = unreplicate(train_metric)
 
