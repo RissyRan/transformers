@@ -507,6 +507,7 @@ def main(start_time_sec):
 
     for epoch in epochs:
         # ======================== Training ================================
+
         if epoch == 1:
             jax.profiler.start_trace("/tmp/jax_profiles")
         if epoch == 2:
@@ -530,6 +531,7 @@ def main(start_time_sec):
 
         train_time += time.time() - train_start
         steps_per_sec = (epoch + 1) * steps_per_epoch / train_time
+        step_time_sec = 1 / steps_per_sec
         examples_per_sec = steps_per_sec * train_batch_size
 
         train_metric = unreplicate(train_metric)
@@ -537,9 +539,13 @@ def main(start_time_sec):
         train_step_progress_bar.close()
         epochs.write(
             f"Epoch... ({epoch + 1}/{num_epochs} | Loss: {train_metric['loss']}, Learning Rate:"
-            f" {train_metric['learning_rate']}, Steps per second: {steps_per_sec},"
-            f" Examples per second: {examples_per_sec})"
+            f" {train_metric['learning_rate']})"
         )
+
+        logger.warning(f'====== This is epoch #: {epoch} ======') 
+        logger.warning(f'====== Avg steps per sec: {steps_per_sec} ======')
+        logger.warning(f'====== Avg step time in sec: {step_time_sec} ======')
+        logger.warning(f'====== Avg examples per sec: {examples_per_sec} ======')
 
         # ======================== Evaluating ==============================
         eval_metrics = []
@@ -578,5 +584,3 @@ if __name__ == "__main__":
     main(start_time_sec)
     wall_time_sec = time.time() - start_time_sec
     logger.warning(f'====== The wall time is: {wall_time_sec} ======')
-    # Let all logs print out
-    time.sleep(60)
