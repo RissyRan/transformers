@@ -20,6 +20,7 @@ Here is the full list of checkpoints on the hub that can be fine-tuned by this s
 https://huggingface.co/models?filter=vit
 """
 
+from clu import metric_writers
 import logging
 import os
 import sys
@@ -404,6 +405,9 @@ def main(start_time_sec):
         collate_fn=collate_fn,
     )
 
+    # CLU writer
+    clu_writer = metric_writers.create_default_writer(training_args.output_dir)
+
     # Enable tensorboard only on the master node
     has_tensorboard = is_tensorboard_available()
     if has_tensorboard and jax.process_index() == 0:
@@ -534,6 +538,12 @@ def main(start_time_sec):
         step_time_sec = 1 / steps_per_sec
         examples_per_sec = steps_per_sec * train_batch_size
 
+        clu_metrics = {}
+        clu_metrics["steps_per_sec"] = steps_per_sec
+        clu_metrics["step_time_sec"] = step_time_sec
+        clu_metrics["examples_per_sec"] = examples_per_sec
+        clu_writer.write_scalars(epoch, clu_metrics)
+
         train_metric = unreplicate(train_metric)
 
         train_step_progress_bar.close()
@@ -542,10 +552,10 @@ def main(start_time_sec):
             f" {train_metric['learning_rate']})"
         )
 
-        logger.warning(f'====== This is epoch #: {epoch} ======') 
-        logger.warning(f'====== Avg steps per sec: {steps_per_sec} ======')
-        logger.warning(f'====== Avg step time in sec: {step_time_sec} ======')
-        logger.warning(f'====== Avg examples per sec: {examples_per_sec} ======')
+        # logger.warning(f'====== This is epoch #: {epoch} ======') 
+        # logger.warning(f'====== Avg steps per sec: {steps_per_sec} ======')
+        # logger.warning(f'====== Avg step time in sec: {step_time_sec} ======')
+        # logger.warning(f'====== Avg examples per sec: {examples_per_sec} ======')
 
         # ======================== Evaluating ==============================
         eval_metrics = []
