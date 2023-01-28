@@ -512,9 +512,9 @@ def main(start_time_sec):
     for epoch in epochs:
         # ======================== Training ================================
 
-        if epoch == 1:
+        if epoch == num_epochs - 2:
             jax.profiler.start_trace("/tmp/jax_profiles")
-        if epoch == 2:
+        if epoch == num_epochs - 1:
             jax.profiler.stop_trace()
 
         train_start = time.time()
@@ -541,9 +541,9 @@ def main(start_time_sec):
         # Save metrics
         if jax.process_index() == 0:
             clu_metrics = {}
-            clu_metrics["steps_per_sec"] = steps_per_sec
-            clu_metrics["step_time_sec"] = step_time_sec
-            clu_metrics["examples_per_sec"] = examples_per_sec
+            clu_metrics["steps_per_sec_per_device"] = steps_per_sec
+            clu_metrics["step_time_sec_per_device"] = step_time_sec
+            clu_metrics["global_examples_per_sec"] = examples_per_sec
             clu_writer.write_scalars(epoch, clu_metrics)
 
         train_metric = unreplicate(train_metric)
