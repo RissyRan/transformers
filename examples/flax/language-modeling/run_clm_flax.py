@@ -320,7 +320,7 @@ def create_learning_rate_fn(
     return schedule_fn
 
 
-def main():
+def main(start_time_sec):
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
@@ -602,6 +602,9 @@ def main():
             max_eval_samples = min(len(eval_dataset), data_args.max_eval_samples)
             eval_dataset = eval_dataset.select(range(max_eval_samples))
 
+    # CLU writer
+    clu_writer = metric_writers.create_default_writer(training_args.output_dir)
+
     # Enable tensorboard only on the master node
     has_tensorboard = is_tensorboard_available()
     if has_tensorboard and jax.process_index() == 0:
@@ -735,8 +738,19 @@ def main():
     train_time = 0
     train_metrics = []
     epochs = tqdm(range(num_epochs), desc="Epoch ... ", position=0)
+
+    # Calculate startup time
+    startup_time_sec = time.time() - start_time_sec
+    logger.warning(f'====== The startup time is: {startup_time_sec} ======')
+
     for epoch in epochs:
         # ======================== Training ================================
+
+        if epoch == num_epochs - 2:
+            jax.profiler.start_trace("/tmp/jax_profiles")
+        if epoch == num_epochs - 1:
+            jax.profiler.stop_trace()
+
         train_start = time.time()
 
         # Create sampling rng
@@ -758,6 +772,19 @@ def main():
                 # Save metrics
                 train_metric = unreplicate(train_metric)
                 train_time += time.time() - train_start
+
+                steps_per_sec = cur_step / train_time
+                step_time_sec = 1 / steps_per_sec
+                examples_per_sec = steps_per_sec * train_batch_size
+
+                # Save CLU metrics
+                if jax.process_index() == 0:
+                    clu_metrics = {}
+                    clu_metrics["steps_per_sec_per_device"] = steps_per_sec
+                    clu_metrics["step_time_sec_per_device"] = step_time_sec
+                    clu_metrics["global_examples_per_sec"] = examples_per_sec
+                    clu_writer.write_scalars(cur_step, clu_metrics)
+                
                 if has_tensorboard and jax.process_index() == 0:
                     write_train_metric(summary_writer, train_metrics, train_time, cur_step)
 
@@ -802,14 +829,14 @@ def main():
                 if has_tensorboard and jax.process_index() == 0:
                     write_eval_metric(summary_writer, eval_metrics, cur_step)
 
-            if cur_step % training_args.save_steps == 0 and cur_step > 0:
-                # save checkpoint after each epoch and push checkpoint to the hub
-                if jax.process_index() == 0:
-                    params = jax.device_get(unreplicate(state.params))
-                    model.save_pretrained(training_args.output_dir, params=params)
-                    tokenizer.save_pretrained(training_args.output_dir)
-                    if training_args.push_to_hub:
-                        repo.push_to_hub(commit_message=f"Saving weights and logs of step {cur_step}", blocking=False)
+            # if cur_step % training_args.save_steps == 0 and cur_step > 0:
+            #     # save checkpoint after each epoch and push checkpoint to the hub
+            #     if jax.process_index() == 0:
+            #         params = jax.device_get(unreplicate(state.params))
+            #         model.save_pretrained(training_args.output_dir, params=params)
+            #         tokenizer.save_pretrained(training_args.output_dir)
+            #         if training_args.push_to_hub:
+            #             repo.push_to_hub(commit_message=f"Saving weights and logs of step {cur_step}", blocking=False)
 
     # Eval after training
     if training_args.do_eval:
@@ -841,4 +868,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    start_time_sec = time.time()
+    main(start_time_sec)
+    wall_time_sec = time.time() - start_time_sec
+    logger.warning(f'====== The wall time is: {wall_time_sec} ======')
