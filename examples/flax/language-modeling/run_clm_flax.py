@@ -21,6 +21,7 @@ https://huggingface.co/models?filter=text-generation
 """
 # You can also adapt this script on your own causal language modeling task. Pointers for this are left as comments.
 
+from clu import metric_writers
 import json
 import logging
 import math
