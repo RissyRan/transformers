@@ -875,14 +875,14 @@ def main(start_time_sec):
                 if has_tensorboard and jax.process_index() == 0:
                     write_eval_metric(summary_writer, eval_metrics, cur_step)
 
-            if cur_step % training_args.save_steps == 0 and cur_step > 0:
-                # save checkpoint after each epoch and push checkpoint to the hub
-                if jax.process_index() == 0:
-                    params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state.params))
-                    model.save_pretrained(training_args.output_dir, params=params)
-                    tokenizer.save_pretrained(training_args.output_dir)
-                    if training_args.push_to_hub:
-                        repo.push_to_hub(commit_message=f"Saving weights and logs of step {cur_step}", blocking=False)
+            # if cur_step % training_args.save_steps == 0 and cur_step > 0:
+            #     # save checkpoint after each epoch and push checkpoint to the hub
+            #     if jax.process_index() == 0:
+            #         params = jax.device_get(jax.tree_util.tree_map(lambda x: x[0], state.params))
+            #         model.save_pretrained(training_args.output_dir, params=params)
+            #         tokenizer.save_pretrained(training_args.output_dir)
+            #         if training_args.push_to_hub:
+            #             repo.push_to_hub(commit_message=f"Saving weights and logs of step {cur_step}", blocking=False)
 
     # Eval after training
     if training_args.do_eval:
