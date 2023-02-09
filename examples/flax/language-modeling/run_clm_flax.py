@@ -682,6 +682,10 @@ def main(start_time_sec):
 
     # Setup train state
     state = TrainState.create(apply_fn=model.__call__, params=model.params, tx=optimizer, dropout_rng=dropout_rng)
+    
+    param_count = sum(x.size for x in jax.tree_leaves(model.params))
+    logger.info("***** Model params *****")
+    logger.info(f"num of params: {param_count}")
 
     def loss_fn(logits, labels):
         shift_logits = logits[..., :-1, :]
