@@ -746,11 +746,6 @@ def main(start_time_sec):
     for epoch in epochs:
         # ======================== Training ================================
 
-        if epoch == num_epochs - 2:
-            jax.profiler.start_trace("/tmp/jax_profiles")
-        if epoch == num_epochs - 1:
-            jax.profiler.stop_trace()
-
         train_start = time.time()
 
         # Create sampling rng
@@ -767,6 +762,11 @@ def main(start_time_sec):
             train_metrics.append(train_metric)
 
             cur_step = epoch * (len(train_dataset) // train_batch_size) + step
+
+            if epoch == 0 and cur_step == 1000:
+                jax.profiler.start_trace("/tmp/jax_profiles")
+            if epoch == 0 and cur_step == 1020:
+                jax.profiler.stop_trace()
 
             if cur_step % training_args.logging_steps == 0 and cur_step > 0:
                 # Save metrics
