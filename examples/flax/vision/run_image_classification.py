@@ -105,6 +105,7 @@ class TrainingArguments:
         default=None, metadata={"help": "The name of the repository to keep in sync with the local `output_dir`."}
     )
     hub_token: str = field(default=None, metadata={"help": "The token to use to push to the Model Hub."})
+    fake_data: bool = field(default=False, metadata={"help": "Indicate if use fake data"})
 
     def __post_init__(self):
         if self.output_dir is not None:
@@ -177,9 +178,11 @@ class DataTrainingArguments:
     """
 
     train_dir: str = field(
+        default='',
         metadata={"help": "Path to the root training directory which contains one subdirectory per class."}
     )
     validation_dir: str = field(
+        default='',
         metadata={"help": "Path to the root validation directory which contains one subdirectory per class."},
     )
     image_size: Optional[int] = field(default=224, metadata={"help": " The size (resolution) of each image."})
@@ -307,35 +310,51 @@ def main(start_time_sec):
     # Note that here we are using some default pre-processing, for maximum accuray
     # one should tune this part and carefully select what transformations to use.
     normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-    train_dataset = torchvision.datasets.ImageFolder(
-        data_args.train_dir,
-        transforms.Compose(
-            [
-                transforms.RandomResizedCrop(data_args.image_size),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                normalize,
-            ]
-        ),
-    )
 
-    eval_dataset = torchvision.datasets.ImageFolder(
-        data_args.validation_dir,
-        transforms.Compose(
-            [
-                transforms.Resize(data_args.image_size),
-                transforms.CenterCrop(data_args.image_size),
-                transforms.ToTensor(),
-                normalize,
-            ]
-        ),
-    )
+    train_size = 12000
+    eval_size = 2000
+    num_classes = 10
+
+    if training_args.fake_data:
+        train_dataset = torchvision.datasets.FakeData(
+            size=train_size, image_size=(3, data_args.image_size, data_args.image_size),
+            num_classes=num_classes, transform=transforms.ToTensor())
+
+        eval_dataset = torchvision.datasets.FakeData(
+            size=eval_size, image_size=(3, data_args.image_size, data_args.image_size),
+            num_classes=num_classes, transform=transforms.ToTensor())
+    else:
+        train_dataset = torchvision.datasets.ImageFolder(
+            data_args.train_dir,
+            transforms.Compose(
+                [
+                    transforms.RandomResizedCrop(data_args.image_size),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.ToTensor(),
+                    normalize,
+                ]
+            ),
+        )
+
+        eval_dataset = torchvision.datasets.ImageFolder(
+            data_args.validation_dir,
+            transforms.Compose(
+                [
+                    transforms.Resize(data_args.image_size),
+                    transforms.CenterCrop(data_args.image_size),
+                    transforms.ToTensor(),
+                    normalize,
+                ]
+            ),
+        )
+
+        num_classes = len(train_dataset.classes)
 
     # Load pretrained model and tokenizer
     if model_args.config_name:
         config = AutoConfig.from_pretrained(
             model_args.config_name,
-            num_labels=len(train_dataset.classes),
+            num_labels=num_classes,
             image_size=data_args.image_size,
             cache_dir=model_args.cache_dir,
             use_auth_token=True if model_args.use_auth_token else None,
@@ -343,7 +362,7 @@ def main(start_time_sec):
     elif model_args.model_name_or_path:
         config = AutoConfig.from_pretrained(
             model_args.model_name_or_path,
-            num_labels=len(train_dataset.classes),
+            num_labels=num_classes,
             image_size=data_args.image_size,
             cache_dir=model_args.cache_dir,
             use_auth_token=True if model_args.use_auth_token else None,
@@ -540,6 +559,7 @@ def main(start_time_sec):
 
         # Save metrics
         if jax.process_index() == 0:
+            logger.warning(f'====== Epoch No.: {epoch} ======')
             clu_metrics = {}
             clu_metrics["steps_per_sec_per_device"] = steps_per_sec
             clu_metrics["step_time_sec_per_device"] = step_time_sec
@@ -554,7 +574,7 @@ def main(start_time_sec):
             f" {train_metric['learning_rate']})"
         )
 
-        # logger.warning(f'====== This is epoch #: {epoch} ======') 
+        # logger.warning(f'====== This is epoch #: {epoch} ======')
         # logger.warning(f'====== Avg steps per sec: {steps_per_sec} ======')
         # logger.warning(f'====== Avg step time in sec: {step_time_sec} ======')
         # logger.warning(f'====== Avg examples per sec: {examples_per_sec} ======')
