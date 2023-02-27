@@ -311,8 +311,8 @@ def main(start_time_sec):
     # one should tune this part and carefully select what transformations to use.
     normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 
-    train_size = 12000
-    eval_size = 2000
+    train_size = 10000
+    eval_size = 1000
     num_classes = 10
 
     if training_args.fake_data:
