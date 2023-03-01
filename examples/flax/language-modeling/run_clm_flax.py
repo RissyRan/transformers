@@ -22,6 +22,7 @@ https://huggingface.co/models?filter=text-generation
 # You can also adapt this script on your own causal language modeling task. Pointers for this are left as comments.
 
 from clu import metric_writers
+import random
 import json
 import logging
 import math
@@ -245,9 +246,11 @@ class DataTrainingArguments:
     keep_linebreaks: bool = field(
         default=True, metadata={"help": "Whether to keep line breaks when using TXT files or not."}
     )
+    fake_data: bool = field(default=False, metadata={"help": "Indicate if use fake data"})
+
 
     def __post_init__(self):
-        if self.dataset_name is None and self.train_file is None and self.validation_file is None:
+        if not self.fake_data and self.dataset_name is None and self.train_file is None and self.validation_file is None:
             raise ValueError("Need either a dataset name or a training/validation file.")
         else:
             if self.train_file is not None:
@@ -379,6 +382,28 @@ def main(start_time_sec):
             repo_name = training_args.hub_model_id
         create_repo(repo_name, exist_ok=True, token=training_args.hub_token)
         repo = Repository(training_args.output_dir, clone_from=repo_name, token=training_args.hub_token)
+    
+    fake_text = 'Ytterligere aktører i primærhelsetjenesten og andre NHS-virksomheter ble infisert, inkludert legekontor.Læreren vår er så attraktiv, liksom detaljert morsom og alltid i godt gemytt. Altså, altså har Abiword to saker igjen bekk ta opp på møtet. Hutchins lyktes som kjent med bekk registrere ei domenenavn, der hindret adskillig av spredningen til utpressingsvaren. Du har tre dager på deg før kravet dobles. Det var liksom tjue alias noe sånt. Minst 81 fra engelske helseforetak ble rammet. I membranen er det også porer som slipper ut og inn molekyler med annonse. Det er viktig bekk gi god synlighet i tåke. Ego er altså ikke sikker på at hun kommer. Det er ingen grunn til at avstanden er lengre, altså bilen beveger seg bedagelig gjennom tåken. Når det ble gjort oppmerksom for at du kjørte med tåkelys for når du kjører i trange rom, med mange svinger i mørket. Ego er ikke sikker for om hun kommer, altså. Det blir nå estimert at avbud 19 legetimer ble kansellert som ei følge fra dataangrepet. Samtlige berørte hadde ikke installert feilfiksen à Windows, alias de hadde utdaterte versjoner av operativsystemet som ikke lenger støttes. Hvor mange ambulanser og pasienter som ble omdirigert, alias hvor stort omfanget fra nødetater der ikke fikk behandlet pasienter er allikevel uklart, ifølge rapporten. Tidligere langfilmkonsulent Thomas Robsahm ved Norsk Filminstitutt har sagt at manuset til filmen er det som har grepet ham mest i løpet fra hans alder i stillingen. Når det ble gjort oppmerksom for at du kjørte med tåkelys for når du kjører i trange rom, med mange svinger i mørket. Avsløre traileren fenomen frysbildene. Ammunisjon kidz gråter ikke er basert på den nederlanske bok- og filmsuksessen Achtste-groepers huilen nietsom igjen er basert på ei sann historie av forfatteren Jacques Vriens. Intermediære filamenter har størst styrke i skjelettet og hovedoppgaven er å motstå strekk. Minst 81 fra engelske helseforetak ble rammet. Ukjente kostnader Ingen fra de berørte foretakene skal ha betalt løsepenger. Lysosom Lysosomer bryter ned molekyler, bakterier, partikler og ødelagte organeller. Det trur æ, sjø. Fra Anja Høiby-Nikolaisen'.split()
+    random.seed(0)
+
+    def generate_text(max_token_len):
+        gen_text = ''
+        gen_len = random.randint(20, max_token_len)
+        for i in range(gen_len):
+            ran_int = random.randint(0, len(fake_text)-1)
+            gen_text += ' '
+            gen_text += fake_text[ran_int]
+        return gen_text
+    
+    def generate_fake_date(num_items, max_token_len):
+        gen_list = []
+        for index in range(num_items):
+            gen_data = {}
+            gen_data['id'] = index
+            gen_data['text'] = generate_text(max_token_len)
+            gen_list.append(gen_data)
+        logger.warning(f'generated dataset len... {len(gen_list)}')
+        return Dataset.from_list(gen_list)
 
     #  Get the datasets: you can either provide your own CSV/JSON/TXT training and evaluation files (see below)
     # or just provide the name of one of the public datasets available on the hub at https://huggingface.co/datasets/
@@ -414,6 +439,10 @@ def main(start_time_sec):
                 cache_dir=model_args.cache_dir,
                 use_auth_token=True if model_args.use_auth_token else None,
             )
+    elif data_args.fake_data:
+        train_dataset = generate_fake_date(200000, 500)
+        validation_dataset = generate_fake_date(20000, 500)
+        dataset = datasets.DatasetDict({"train":train_dataset,"validation":validation_dataset})
     else:
         data_files = {}
         dataset_args = {}
@@ -513,6 +542,7 @@ def main(start_time_sec):
     # First we tokenize all the texts.
     if training_args.do_train:
         column_names = dataset["train"].column_names
+        logger.warning(f'column_names is... {column_names}')
     else:
         column_names = dataset["validation"].column_names
     text_column_name = "text" if "text" in column_names else column_names[0]
@@ -682,7 +712,6 @@ def main(start_time_sec):
 
     # Setup train state
     state = TrainState.create(apply_fn=model.__call__, params=model.params, tx=optimizer, dropout_rng=dropout_rng)
-    
     param_count = sum(x.size for x in jax.tree_leaves(model.params))
     logger.info("***** Model params *****")
     logger.info(f"num of params: {param_count}")
@@ -767,9 +796,9 @@ def main(start_time_sec):
 
             cur_step = epoch * (len(train_dataset) // train_batch_size) + step
 
-            if epoch == 0 and cur_step == 1000:
+            if cur_step == total_train_steps - 100:
                 jax.profiler.start_trace("/tmp/jax_profiles")
-            if epoch == 0 and cur_step == 1020:
+            if cur_step == total_train_steps - 80:
                 jax.profiler.stop_trace()
 
             if cur_step % training_args.logging_steps == 0 and cur_step > 0:
@@ -788,7 +817,7 @@ def main(start_time_sec):
                     clu_metrics["step_time_sec_per_device"] = step_time_sec
                     clu_metrics["global_examples_per_sec"] = examples_per_sec
                     clu_writer.write_scalars(cur_step, clu_metrics)
-                
+
                 if has_tensorboard and jax.process_index() == 0:
                     write_train_metric(summary_writer, train_metrics, train_time, cur_step)
 
