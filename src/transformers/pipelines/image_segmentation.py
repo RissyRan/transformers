@@ -67,12 +67,6 @@ class ImageSegmentationPipeline(Pipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if self.image_processor is None and self.feature_extractor is not None:
-            # Backward compatible change, if users called
-            # ImageSegmentationPipeline(.., feature_extractor=MyFeatureExtractor())
-            # then we should keep working
-            self.image_processor = self.feature_extractor
-
         if self.framework == "tf":
             raise ValueError(f"The {self.__class__} is only available in PyTorch.")
 
@@ -87,11 +81,11 @@ class ImageSegmentationPipeline(Pipeline):
         )
 
     def _sanitize_parameters(self, **kwargs):
-        preprocessor_kwargs = {}
+        preprocess_kwargs = {}
         postprocess_kwargs = {}
         if "subtask" in kwargs:
             postprocess_kwargs["subtask"] = kwargs["subtask"]
-            preprocessor_kwargs["subtask"] = kwargs["subtask"]
+            preprocess_kwargs["subtask"] = kwargs["subtask"]
         if "threshold" in kwargs:
             postprocess_kwargs["threshold"] = kwargs["threshold"]
         if "mask_threshold" in kwargs:
@@ -99,7 +93,7 @@ class ImageSegmentationPipeline(Pipeline):
         if "overlap_mask_area_threshold" in kwargs:
             postprocess_kwargs["overlap_mask_area_threshold"] = kwargs["overlap_mask_area_threshold"]
 
-        return preprocessor_kwargs, {}, postprocess_kwargs
+        return preprocess_kwargs, {}, postprocess_kwargs
 
     def __call__(self, images, **kwargs) -> Union[Predictions, List[Prediction]]:
         """
@@ -171,7 +165,6 @@ class ImageSegmentationPipeline(Pipeline):
     def postprocess(
         self, model_outputs, subtask=None, threshold=0.9, mask_threshold=0.5, overlap_mask_area_threshold=0.5
     ):
-
         fn = None
         if subtask in {"panoptic", None} and hasattr(self.image_processor, "post_process_panoptic_segmentation"):
             fn = self.image_processor.post_process_panoptic_segmentation
